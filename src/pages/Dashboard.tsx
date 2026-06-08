@@ -20,6 +20,19 @@ import * as XLSX from 'xlsx';
 
 const PIE_COLORS = ['#2D6A4F', '#D4A373'];
 
+function getBillMonth(bill: { month?: string; dueDate: string }): string {
+  if (bill.month) return bill.month;
+  try {
+    const d = new Date(bill.dueDate);
+    if (!isNaN(d.getTime())) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
 export default function Dashboard() {
   const stalls = useMarketStore((s) => s.stalls);
   const merchants = useMarketStore((s) => s.merchants);
@@ -32,7 +45,7 @@ export default function Dashboard() {
 
   const monthBills = useMemo(() => {
     if (!selectedMonth) return feeBills;
-    return feeBills.filter((b) => b.month === selectedMonth);
+    return feeBills.filter((b) => getBillMonth(b) === selectedMonth);
   }, [feeBills, selectedMonth]);
 
   const monthComplaints = useMemo(() => {
@@ -154,7 +167,7 @@ export default function Dashboard() {
         const stall = contract ? stalls.find((s) => s.id === contract.stallId) : undefined;
         const merchant = contract ? merchants.find((m) => m.id === contract.merchantId) : undefined;
         return {
-          月份: b.month ?? '',
+          月份: b.month || getBillMonth(b),
           摊位号: stall?.stallNo ?? '',
           商户: merchant?.name ?? '',
           金额: b.amount,

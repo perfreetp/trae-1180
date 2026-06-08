@@ -38,6 +38,7 @@ interface ContractFormData {
   endDate: string;
   deposit: number;
   monthlyRent: number;
+  status: Contract['status'];
 }
 
 const emptyForm: ContractFormData = {
@@ -47,7 +48,21 @@ const emptyForm: ContractFormData = {
   endDate: '',
   deposit: 0,
   monthlyRent: 0,
+  status: 'active',
 };
+
+function getBillMonth(bill: FeeBill): string {
+  if (bill.month) return bill.month;
+  try {
+    const d = new Date(bill.dueDate);
+    if (!isNaN(d.getTime())) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
 
 export default function Contracts() {
   const { contracts, feeBills, stalls, merchants, addContract, updateContract, deleteContract, addFeeBill, addFeeBills, updateFeeBill } = useMarketStore();
@@ -96,6 +111,7 @@ export default function Contracts() {
       endDate: contract.endDate,
       deposit: contract.deposit,
       monthlyRent: contract.monthlyRent,
+      status: contract.status,
     });
     setShowModal(true);
   };
@@ -130,7 +146,10 @@ export default function Contracts() {
   const handleBatchGenerate = () => {
     const activeContracts = contracts.filter((c) => c.status === 'active');
     const existingKeys = new Set(
-      feeBills.map((b) => `${b.contractId}_${b.month}`)
+      feeBills.map((b) => {
+        const m = getBillMonth(b);
+        return `${b.contractId}_${m}`;
+      })
     );
 
     const newBills: FeeBill[] = [];
@@ -337,7 +356,7 @@ export default function Contracts() {
                     <tr key={f.id} className="table-row">
                       <td className="px-4 py-3 font-mono">{f.id}</td>
                       <td className="px-4 py-3 font-mono">{f.contractId}</td>
-                      <td className="px-4 py-3">{f.month ?? '-'}</td>
+                      <td className="px-4 py-3">{f.month ?? getBillMonth(f) ?? '-'}</td>
                       <td className="px-4 py-3 text-right">{f.amount.toLocaleString()}</td>
                       <td className="px-4 py-3">{f.dueDate}</td>
                       <td className="px-4 py-3 text-center">
@@ -452,6 +471,25 @@ export default function Contracts() {
                   />
                 </div>
               </div>
+              {editingId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">合同状态</label>
+                  <select
+                    className="select-field"
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value as Contract['status'] })}
+                  >
+                    <option value="active">生效中</option>
+                    <option value="expired">已到期</option>
+                    <option value="terminated">已终止</option>
+                  </select>
+                  {form.status !== 'active' && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      修改为非生效状态后，对应摊位将自动释放为空置状态
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button className="btn-secondary" onClick={() => setShowModal(false)}>

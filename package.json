@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "农贸市场集市管理桌面客户端",
   "type": "module",
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

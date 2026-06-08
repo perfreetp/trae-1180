@@ -12,15 +12,13 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     title: '集市管理系统',
-    icon: path.join(__dirname, 'public', 'favicon.svg'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
-  const startUrl = 'http://localhost:5173/stalls';
-  win.loadURL(startUrl);
+  win.loadURL('http://localhost:5173/stalls');
 
   win.on('closed', () => {
     win = null;
@@ -31,8 +29,8 @@ function startVite() {
   return new Promise((resolve) => {
     const isDev = !app.isPackaged;
     if (isDev) {
-      viteProcess = spawn(process.platform === 'win32' ? 'npx' : 'npx', ['vite', '--port', '5173'], {
-        cwd: path.join(__dirname),
+      viteProcess = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['vite', '--port', '5173'], {
+        cwd: __dirname,
         shell: true,
         stdio: 'pipe',
       });
@@ -40,7 +38,7 @@ function startVite() {
       let resolved = false;
       viteProcess.stdout.on('data', (data) => {
         const output = data.toString();
-        if (!resolved && output.includes('ready')) {
+        if (!resolved && (output.includes('ready') || output.includes('Local:'))) {
           resolved = true;
           resolve();
         }
@@ -53,11 +51,26 @@ function startVite() {
           resolved = true;
           resolve();
         }
-      }, 5000);
+      }, 8000);
     } else {
       resolve();
     }
   });
+}
+
+function cleanup() {
+  if (viteProcess) {
+    try {
+      if (process.platform === 'win32') {
+        spawn('taskkill', ['/PID', String(viteProcess.pid), '/T', '/F'], { shell: true });
+      } else {
+        viteProcess.kill('SIGTERM');
+      }
+    } catch (e) {
+      // ignore
+    }
+    viteProcess = null;
+  }
 }
 
 app.whenReady().then(async () => {
@@ -72,16 +85,12 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (viteProcess) {
-    viteProcess.kill();
-  }
+  cleanup();
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
-  if (viteProcess) {
-    viteProcess.kill();
-  }
+  cleanup();
 });
