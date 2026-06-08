@@ -50,7 +50,7 @@ const emptyForm: ContractFormData = {
 };
 
 export default function Contracts() {
-  const { contracts, feeBills, stalls, merchants, addContract, updateContract, deleteContract, addFeeBill, updateFeeBill } = useMarketStore();
+  const { contracts, feeBills, stalls, merchants, addContract, updateContract, deleteContract, addFeeBill, addFeeBills, updateFeeBill } = useMarketStore();
 
   const [activeTab, setActiveTab] = useState<0 | 1>(0);
   const [contractFilter, setContractFilter] = useState<ContractStatus>('全部');
@@ -58,6 +58,10 @@ export default function Contracts() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ContractFormData>(emptyForm);
+
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchMonth, setBatchMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [batchResult, setBatchResult] = useState<{ total: number; added: number; skipped: number } | null>(null);
 
   const getStallNo = (stallId: string) => stalls.find((s) => s.id === stallId)?.stallNo ?? '-';
   const getMerchantName = (merchantId: string) => merchants.find((m) => m.id === merchantId)?.name ?? '-';
@@ -112,13 +116,55 @@ export default function Contracts() {
     const now = new Date();
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 5);
     const dueDate = nextMonth.toISOString().slice(0, 10);
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     addFeeBill({
       id: Date.now().toString(),
       contractId: contract.id,
       amount: contract.monthlyRent,
       dueDate,
       status: 'unpaid',
+      month,
     });
+  };
+
+  const handleBatchGenerate = () => {
+    const activeContracts = contracts.filter((c) => c.status === 'active');
+    const existingKeys = new Set(
+      feeBills.map((b) => `${b.contractId}_${b.month}`)
+    );
+
+    const newBills: FeeBill[] = [];
+    const [year, month] = batchMonth.split('-').map(Number);
+    const dueDate = new Date(year, month, 5).toISOString().slice(0, 10);
+
+    activeContracts.forEach((c, idx) => {
+      const key = `${c.id}_${batchMonth}`;
+      if (!existingKeys.has(key)) {
+        newBills.push({
+          id: (Date.now() + idx + 1).toString(),
+          contractId: c.id,
+          amount: c.monthlyRent,
+          dueDate,
+          status: 'unpaid',
+          month: batchMonth,
+        });
+      }
+    });
+
+    if (newBills.length > 0) {
+      addFeeBills(newBills);
+    }
+
+    setBatchResult({
+      total: activeContracts.length,
+      added: newBills.length,
+      skipped: activeContracts.length - newBills.length,
+    });
+
+    setTimeout(() => {
+      setActiveTab(1);
+      setFeeFilter('未缴');
+    }, 800);
   };
 
   const handleMarkPaid = (bill: FeeBill) => {
@@ -168,9 +214,17 @@ export default function Contracts() {
                 </button>
               ))}
             </div>
-            <button className="btn-primary btn-sm" onClick={openAddModal}>
-              新增合同
-            </button>
+            <div className="flex gap-2">
+              <button
+                className="btn-secondary btn-sm"
+                onClick={() => { setShowBatchModal(true); setBatchResult(null); }}
+              >
+                批量生成收费单
+              </button>
+              <button className="btn-primary btn-sm" onClick={openAddModal}>
+                新增合同
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -270,6 +324,7 @@ export default function Contracts() {
                   <tr className="table-header">
                     <th className="px-4 py-3 text-left font-medium">收费单号</th>
                     <th className="px-4 py-3 text-left font-medium">合同编号</th>
+                    <th className="px-4 py-3 text-left font-medium">月份</th>
                     <th className="px-4 py-3 text-right font-medium">金额(元)</th>
                     <th className="px-4 py-3 text-left font-medium">应缴日期</th>
                     <th className="px-4 py-3 text-center font-medium">状态</th>
@@ -282,6 +337,7 @@ export default function Contracts() {
                     <tr key={f.id} className="table-row">
                       <td className="px-4 py-3 font-mono">{f.id}</td>
                       <td className="px-4 py-3 font-mono">{f.contractId}</td>
+                      <td className="px-4 py-3">{f.month ?? '-'}</td>
                       <td className="px-4 py-3 text-right">{f.amount.toLocaleString()}</td>
                       <td className="px-4 py-3">{f.dueDate}</td>
                       <td className="px-4 py-3 text-center">
@@ -301,7 +357,7 @@ export default function Contracts() {
                   ))}
                   {filteredFeeBills.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                      <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                         暂无收费单数据
                       </td>
                     </tr>
@@ -405,6 +461,77 @@ export default function Contracts() {
                 {editingId ? '保存' : '确认新增'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showBatchModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-forest-700 mb-4">批量生成月度收费单</h3>
+
+            {!batchResult ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">选择月份</label>
+                  <input
+                    type="month"
+                    className="input-field"
+                    value={batchMonth}
+                    onChange={(e) => setBatchMonth(e.target.value)}
+                  />
+                </div>
+                <div className="text-sm text-gray-500">
+                  将为所有<span className="font-medium text-forest-600">生效中</span>的合同生成
+                  <span className="font-medium text-forest-600">{batchMonth}</span>月收费单，
+                  已存在的收费单将跳过。
+                </div>
+                <div className="text-sm text-gray-500">
+                  当前生效合同：<span className="font-medium">{contracts.filter((c) => c.status === 'active').length}</span> 份
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button className="btn-secondary" onClick={() => setShowBatchModal(false)}>
+                    取消
+                  </button>
+                  <button className="btn-primary" onClick={handleBatchGenerate}>
+                    确认生成
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-center py-4">
+                  <div className="text-4xl mb-2">✅</div>
+                  <div className="text-lg font-medium text-forest-700">批量生成完成</div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="card p-3">
+                    <div className="text-xl font-bold">{batchResult.total}</div>
+                    <div className="text-xs text-gray-500">生效合同</div>
+                  </div>
+                  <div className="card p-3">
+                    <div className="text-xl font-bold text-green-600">{batchResult.added}</div>
+                    <div className="text-xs text-gray-500">新增收费单</div>
+                  </div>
+                  <div className="card p-3">
+                    <div className="text-xl font-bold text-amber-600">{batchResult.skipped}</div>
+                    <div className="text-xs text-gray-500">跳过(已存在)</div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button
+                    className="btn-primary"
+                    onClick={() => {
+                      setShowBatchModal(false);
+                      setActiveTab(1);
+                      setFeeFilter('未缴');
+                    }}
+                  >
+                    查看未缴清单
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

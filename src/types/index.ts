@@ -16,6 +16,7 @@ export interface Merchant {
   business: string;
   licenseUrl?: string;
   licenseType?: string;
+  licenseUpdatedAt?: string;
 }
 
 export interface Contract {
@@ -36,6 +37,7 @@ export interface FeeBill {
   dueDate: string;
   status: 'paid' | 'unpaid' | 'overdue';
   paidDate?: string;
+  month?: string;
 }
 
 export interface Purchase {

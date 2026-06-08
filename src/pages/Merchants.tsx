@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMarketStore } from '@/store/useMarketStore';
 import type { Merchant } from '@/types';
+import { Eye, Upload, RefreshCw } from 'lucide-react';
 
 const TABS = ['基本信息', '证照信息', '关联摊位'] as const;
 type Tab = (typeof TABS)[number];
@@ -15,6 +16,30 @@ const CONTRACT_STATUS_MAP: Record<string, { label: string; cls: string }> = {
   terminated: { label: '已终止', cls: 'badge-red' },
 };
 
+function getLicenseDataUrl(merchantId: string): string | null {
+  try {
+    return localStorage.getItem(`license_img_${merchantId}`);
+  } catch {
+    return null;
+  }
+}
+
+function setLicenseDataUrl(merchantId: string, dataUrl: string) {
+  try {
+    localStorage.setItem(`license_img_${merchantId}`, dataUrl);
+  } catch {
+    // storage full
+  }
+}
+
+function removeLicenseDataUrl(merchantId: string) {
+  try {
+    localStorage.removeItem(`license_img_${merchantId}`);
+  } catch {
+    // ignore
+  }
+}
+
 export default function Merchants() {
   const { merchants, contracts, stalls, addMerchant, updateMerchant, deleteMerchant } = useMarketStore();
 
@@ -25,7 +50,9 @@ export default function Merchants() {
   const [editForm, setEditForm] = useState({ name: '', contact: '', phone: '', business: '' });
   const [modalForm, setModalForm] = useState({ name: '', contact: '', phone: '', business: '' });
   const [licenseType, setLicenseType] = useState('');
-  const [licenseFileName, setLicenseFileName] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selected = merchants.find((m) => m.id === selectedId) ?? null;
 
@@ -39,10 +66,6 @@ export default function Merchants() {
     ? contracts.filter((c) => c.merchantId === selected.id)
     : [];
 
-  const merchantStalls = selected
-    ? stalls.filter((s) => s.merchantId === selected.id)
-    : [];
-
   function handleSelect(id: string) {
     setSelectedId(id);
     setActiveTab('基本信息');
@@ -50,8 +73,9 @@ export default function Merchants() {
     if (m) {
       setEditForm({ name: m.name, contact: m.contact, phone: m.phone, business: m.business });
       setLicenseType(m.licenseType ?? '');
-      setLicenseFileName('');
     }
+    const stored = getLicenseDataUrl(id);
+    setPreviewUrl(stored);
   }
 
   function handleSaveBasic() {
@@ -64,13 +88,40 @@ export default function Merchants() {
     });
   }
 
+  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setPreviewUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  }
+
   function handleSaveLicense() {
     if (!selected) return;
+    if (previewUrl) {
+      setLicenseDataUrl(selected.id, previewUrl);
+    }
+    const now = new Date().toISOString().slice(0, 10);
     updateMerchant(selected.id, {
       licenseType,
-      licenseUrl: licenseFileName ? `/licenses/${licenseFileName}` : selected.licenseUrl,
+      licenseUrl: previewUrl ? `license_img_${selected.id}` : selected.licenseUrl,
+      licenseUpdatedAt: now,
     });
-    setLicenseFileName('');
+  }
+
+  function handleReplaceLicense() {
+    if (!selected) return;
+    setPreviewUrl(null);
+    removeLicenseDataUrl(selected.id);
+    updateMerchant(selected.id, {
+      licenseUrl: undefined,
+      licenseType: '',
+      licenseUpdatedAt: new Date().toISOString().slice(0, 10),
+    });
+    setLicenseType('');
   }
 
   function handleAdd() {
@@ -86,25 +137,16 @@ export default function Merchants() {
     setShowModal(false);
     setSelectedId(id);
     setActiveTab('基本信息');
-    const m = merchants.find((x) => x.id === id);
-    if (m) {
-      setEditForm({ name: m.name, contact: m.contact, phone: m.phone, business: m.business });
-    } else {
-      setEditForm({ ...modalForm });
-    }
+    setEditForm({ ...modalForm });
+    setPreviewUrl(null);
   }
 
   function handleDelete(id: string) {
     deleteMerchant(id);
+    removeLicenseDataUrl(id);
     if (selectedId === id) {
       setSelectedId(null);
-    }
-  }
-
-  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLicenseFileName(file.name);
+      setPreviewUrl(null);
     }
   }
 
@@ -246,16 +288,14 @@ export default function Merchants() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">上传证照</label>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">上传证照图片</label>
                       <input
+                        ref={fileInputRef}
                         type="file"
                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-forest-50 file:text-forest-700 hover:file:bg-forest-100"
                         accept="image/*"
                         onChange={handleUpload}
                       />
-                      {licenseFileName && (
-                        <div className="text-sm text-forest-600 mt-1">已选择：{licenseFileName}</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex justify-end">
@@ -263,11 +303,51 @@ export default function Merchants() {
                       保存证照
                     </button>
                   </div>
-                  {(selected.licenseUrl || licenseFileName) && (
-                    <div className="mt-4">
-                      <div className="text-sm font-medium text-gray-600 mb-2">证照图片</div>
-                      <div className="w-48 h-32 border-2 border-dashed border-ivory-300 rounded-lg flex items-center justify-center bg-ivory-50 text-gray-400 text-sm">
-                        {selected.licenseType ?? '证照'}预览
+
+                  {(previewUrl || selected.licenseUrl) && (
+                    <div className="mt-4 border-t border-ivory-200 pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <span className="text-sm font-medium text-gray-700">
+                            {selected.licenseType || '证照'}档案
+                          </span>
+                          {selected.licenseUpdatedAt && (
+                            <span className="text-xs text-gray-400 ml-3">
+                              更新于 {selected.licenseUpdatedAt}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn-secondary btn-sm flex items-center gap-1"
+                            onClick={() => setShowPreviewModal(true)}
+                          >
+                            <Eye className="w-3.5 h-3.5" /> 查看大图
+                          </button>
+                          <button
+                            className="btn-secondary btn-sm flex items-center gap-1 text-amber-warm"
+                            onClick={handleReplaceLicense}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" /> 换证
+                          </button>
+                        </div>
+                      </div>
+                      <div
+                        className="w-64 h-44 border-2 border-ivory-300 rounded-lg overflow-hidden bg-ivory-50 cursor-pointer hover:ring-2 hover:ring-forest-500 transition-all"
+                        onClick={() => setShowPreviewModal(true)}
+                      >
+                        {(previewUrl || (selected.licenseUrl && getLicenseDataUrl(selected.id))) ? (
+                          <img
+                            src={previewUrl || getLicenseDataUrl(selected.id) || ''}
+                            alt="证照预览"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                            <Upload className="w-8 h-8 mb-2" />
+                            <span>暂无图片</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -280,14 +360,14 @@ export default function Merchants() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="table-header">
-                          <th className="px-4 py-3 text-left rounded-tl-lg">摊位号</th>
+                          <th className="px-4 py-3 text-left">摊位号</th>
                           <th className="px-4 py-3 text-left">区域</th>
                           <th className="px-4 py-3 text-left">面积</th>
                           <th className="px-4 py-3 text-left">类型</th>
                           <th className="px-4 py-3 text-left">合同编号</th>
                           <th className="px-4 py-3 text-left">合同期限</th>
                           <th className="px-4 py-3 text-left">月租金</th>
-                          <th className="px-4 py-3 text-left rounded-tr-lg">合同状态</th>
+                          <th className="px-4 py-3 text-left">合同状态</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -325,6 +405,29 @@ export default function Merchants() {
           </div>
         )}
       </div>
+
+      {showPreviewModal && (previewUrl || (selected?.licenseUrl && getLicenseDataUrl(selected.id))) && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+          onClick={() => setShowPreviewModal(false)}
+        >
+          <div className="max-w-3xl max-h-[90vh] p-2" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={previewUrl || getLicenseDataUrl(selected!.id) || ''}
+              alt="证照大图"
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+            />
+            <div className="text-center mt-2">
+              <button
+                className="btn-secondary btn-sm"
+                onClick={() => setShowPreviewModal(false)}
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">

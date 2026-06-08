@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useMarketStore } from '@/store/useMarketStore';
 import {
   BarChart,
@@ -28,6 +28,23 @@ export default function Dashboard() {
   const complaints = useMarketStore((s) => s.complaints);
   const inspections = useMarketStore((s) => s.inspections);
 
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
+
+  const monthBills = useMemo(() => {
+    if (!selectedMonth) return feeBills;
+    return feeBills.filter((b) => b.month === selectedMonth);
+  }, [feeBills, selectedMonth]);
+
+  const monthComplaints = useMemo(() => {
+    if (!selectedMonth) return complaints;
+    return complaints.filter((c) => c.complaintDate.startsWith(selectedMonth));
+  }, [complaints, selectedMonth]);
+
+  const monthInspections = useMemo(() => {
+    if (!selectedMonth) return inspections;
+    return inspections.filter((i) => i.inspectDate.startsWith(selectedMonth));
+  }, [inspections, selectedMonth]);
+
   const rentalRate = useMemo(() => {
     if (stalls.length === 0) return 0;
     const occupied = stalls.filter((s) => s.status === 'occupied').length;
@@ -35,19 +52,19 @@ export default function Dashboard() {
   }, [stalls]);
 
   const feeRate = useMemo(() => {
-    if (feeBills.length === 0) return 0;
-    const paid = feeBills.filter((f) => f.status === 'paid').length;
-    return Math.round((paid / feeBills.length) * 100);
-  }, [feeBills]);
+    if (monthBills.length === 0) return 0;
+    const paid = monthBills.filter((f) => f.status === 'paid').length;
+    return Math.round((paid / monthBills.length) * 100);
+  }, [monthBills]);
 
   const pendingComplaints = useMemo(
-    () => complaints.filter((c) => c.status === 'pending').length,
-    [complaints]
+    () => monthComplaints.filter((c) => c.status === 'pending').length,
+    [monthComplaints]
   );
 
   const pendingInspections = useMemo(
-    () => inspections.filter((i) => i.status === 'pending' || i.status === 'rectifying').length,
-    [inspections]
+    () => monthInspections.filter((i) => i.status === 'pending' || i.status === 'rectifying').length,
+    [monthInspections]
   );
 
   const pieData = useMemo(() => {
@@ -66,15 +83,15 @@ export default function Dashboard() {
       const areaContractIds = contracts
         .filter((c) => areaStallIds.includes(c.stallId))
         .map((c) => c.id);
-      const areaBills = feeBills.filter((b) => areaContractIds.includes(b.contractId));
+      const areaBills = monthBills.filter((b) => areaContractIds.includes(b.contractId));
       const paid = areaBills.filter((b) => b.status === 'paid').reduce((sum, b) => sum + b.amount, 0);
       const unpaid = areaBills.filter((b) => b.status !== 'paid').reduce((sum, b) => sum + b.amount, 0);
       return { 区域: area, 已收: paid, 未收: unpaid };
     });
-  }, [stalls, contracts, feeBills]);
+  }, [stalls, contracts, monthBills]);
 
   const complaintTrend = useMemo(() => {
-    const now = new Date();
+    const now = selectedMonth ? new Date(selectedMonth + '-01') : new Date();
     const months: { key: string; label: string }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -87,7 +104,7 @@ export default function Dashboard() {
       const count = complaints.filter((c) => format(new Date(c.complaintDate), 'yyyy-MM') === m.key).length;
       return { 月份: m.label, 投诉数: count };
     });
-  }, [complaints]);
+  }, [complaints, selectedMonth]);
 
   const vacantStalls = useMemo(
     () => stalls.filter((s) => s.status === 'vacant'),
@@ -96,7 +113,7 @@ export default function Dashboard() {
 
   const overdueMerchants = useMemo(() => {
     const map = new Map<string, { count: number; total: number }>();
-    feeBills
+    monthBills
       .filter((b) => b.status === 'overdue')
       .forEach((b) => {
         const contract = contracts.find((c) => c.id === b.contractId);
@@ -115,7 +132,7 @@ export default function Dashboard() {
         overdueTotal: data.total,
       };
     });
-  }, [feeBills, contracts, merchants]);
+  }, [monthBills, contracts, merchants]);
 
   const handleExport = () => {
     const wb = XLSX.utils.book_new();
@@ -132,11 +149,12 @@ export default function Dashboard() {
     XLSX.utils.book_append_sheet(wb, stallSheet, '摊位汇总');
 
     const feeSheet = XLSX.utils.json_to_sheet(
-      feeBills.map((b) => {
+      monthBills.map((b) => {
         const contract = contracts.find((c) => c.id === b.contractId);
         const stall = contract ? stalls.find((s) => s.id === contract.stallId) : undefined;
         const merchant = contract ? merchants.find((m) => m.id === contract.merchantId) : undefined;
         return {
+          月份: b.month ?? '',
           摊位号: stall?.stallNo ?? '',
           商户: merchant?.name ?? '',
           金额: b.amount,
@@ -149,7 +167,7 @@ export default function Dashboard() {
     XLSX.utils.book_append_sheet(wb, feeSheet, '收费统计');
 
     const complaintSheet = XLSX.utils.json_to_sheet(
-      complaints.map((c) => {
+      monthComplaints.map((c) => {
         const merchant = merchants.find((m) => m.id === c.merchantId);
         return {
           商户: merchant?.name ?? '',
@@ -164,7 +182,7 @@ export default function Dashboard() {
     XLSX.utils.book_append_sheet(wb, complaintSheet, '投诉记录');
 
     const inspectionSheet = XLSX.utils.json_to_sheet(
-      inspections.map((i) => {
+      monthInspections.map((i) => {
         const stall = stalls.find((s) => s.id === i.stallId);
         return {
           摊位号: stall?.stallNo ?? '',
@@ -187,7 +205,8 @@ export default function Dashboard() {
     );
     XLSX.utils.book_append_sheet(wb, inspectionSheet, '巡查记录');
 
-    const fileName = `月度经营表_${format(new Date(), 'yyyyMM')}.xlsx`;
+    const monthLabel = selectedMonth || format(new Date(), 'yyyyMM');
+    const fileName = `月度经营表_${monthLabel.replace('-', '')}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
 
@@ -195,10 +214,25 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-forest-800">数据看板</h1>
-        <button className="btn-primary" onClick={handleExport}>
-          导出月度经营表
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-600">统计月份：</label>
+          <input
+            type="month"
+            className="input-field w-44"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+          />
+          <button className="btn-primary" onClick={handleExport}>
+            导出月度经营表
+          </button>
+        </div>
       </div>
+
+      {selectedMonth && (
+        <div className="text-sm text-gray-500 bg-forest-50 rounded-lg px-4 py-2 inline-block">
+          当前筛选月份：<span className="font-medium text-forest-700">{selectedMonth}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card">
@@ -206,15 +240,15 @@ export default function Dashboard() {
           <div className="text-3xl font-bold text-forest-800 mt-1">{rentalRate}%</div>
         </div>
         <div className="card">
-          <div className="text-sm text-forest-600">收费率</div>
+          <div className="text-sm text-forest-600">当月收费率</div>
           <div className="text-3xl font-bold text-forest-800 mt-1">{feeRate}%</div>
         </div>
         <div className="card">
-          <div className="text-sm text-forest-600">待处理投诉数</div>
+          <div className="text-sm text-forest-600">当月待处理投诉</div>
           <div className="text-3xl font-bold text-amber-600 mt-1">{pendingComplaints}</div>
         </div>
         <div className="card">
-          <div className="text-sm text-forest-600">待整改问题数</div>
+          <div className="text-sm text-forest-600">当月待整改问题</div>
           <div className="text-3xl font-bold text-red-600 mt-1">{pendingInspections}</div>
         </div>
       </div>
@@ -243,7 +277,9 @@ export default function Dashboard() {
         </div>
 
         <div className="card">
-          <h2 className="text-lg font-semibold text-forest-800 mb-4">各区域收费统计</h2>
+          <h2 className="text-lg font-semibold text-forest-800 mb-4">
+            {selectedMonth ? `${selectedMonth} 各区域收费` : '各区域收费统计'}
+          </h2>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={areaFeeData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -281,10 +317,10 @@ export default function Dashboard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
-                  <th className="px-4 py-3 text-left rounded-tl-lg">摊位号</th>
+                  <th className="px-4 py-3 text-left">摊位号</th>
                   <th className="px-4 py-3 text-left">区域</th>
                   <th className="px-4 py-3 text-left">面积</th>
-                  <th className="px-4 py-3 text-left rounded-tr-lg">类型</th>
+                  <th className="px-4 py-3 text-left">类型</th>
                 </tr>
               </thead>
               <tbody>
@@ -303,7 +339,9 @@ export default function Dashboard() {
       </div>
 
       <div className="card">
-        <h2 className="text-lg font-semibold text-forest-800 mb-4">欠款商户统计</h2>
+        <h2 className="text-lg font-semibold text-forest-800 mb-4">
+          {selectedMonth ? `${selectedMonth} 欠款商户` : '欠款商户统计'}
+        </h2>
         {overdueMerchants.length === 0 ? (
           <div className="text-sm text-gray-500">暂无欠款商户</div>
         ) : (
@@ -311,9 +349,9 @@ export default function Dashboard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
-                  <th className="px-4 py-3 text-left rounded-tl-lg">商户名称</th>
+                  <th className="px-4 py-3 text-left">商户名称</th>
                   <th className="px-4 py-3 text-left">欠款笔数</th>
-                  <th className="px-4 py-3 text-left rounded-tr-lg">欠款总额</th>
+                  <th className="px-4 py-3 text-left">欠款总额</th>
                 </tr>
               </thead>
               <tbody>

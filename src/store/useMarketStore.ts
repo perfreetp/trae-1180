@@ -24,6 +24,7 @@ interface MarketState {
   deleteContract: (id: string) => void;
 
   addFeeBill: (bill: FeeBill) => void;
+  addFeeBills: (bills: FeeBill[]) => void;
   updateFeeBill: (id: string, data: Partial<FeeBill>) => void;
   deleteFeeBill: (id: string) => void;
 
@@ -53,6 +54,22 @@ function saveToStorage<T>(key: string, data: T) {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
+function syncStallsWithContracts(stalls: Stall[], contracts: Contract[]): Stall[] {
+  const activeMap = new Map<string, string>();
+  contracts.forEach((c) => {
+    if (c.status === 'active') {
+      activeMap.set(c.stallId, c.merchantId);
+    }
+  });
+  return stalls.map((s) => {
+    const merchantId = activeMap.get(s.id);
+    if (merchantId) {
+      return { ...s, status: 'occupied' as const, merchantId };
+    }
+    return { ...s, status: 'vacant' as const, merchantId: undefined };
+  });
+}
+
 export const useMarketStore = create<MarketState>((set, get) => ({
   stalls: loadFromStorage('market_stalls', initialData.stalls),
   merchants: loadFromStorage('market_merchants', initialData.merchants),
@@ -63,17 +80,20 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   inspections: loadFromStorage('market_inspections', initialData.inspections),
 
   addStall: (stall) => {
-    const stalls = [...get().stalls, stall];
+    let stalls = [...get().stalls, stall];
+    stalls = syncStallsWithContracts(stalls, get().contracts);
     saveToStorage('market_stalls', stalls);
     set({ stalls });
   },
   updateStall: (id, data) => {
-    const stalls = get().stalls.map((s) => (s.id === id ? { ...s, ...data } : s));
+    let stalls = get().stalls.map((s) => (s.id === id ? { ...s, ...data } : s));
+    stalls = syncStallsWithContracts(stalls, get().contracts);
     saveToStorage('market_stalls', stalls);
     set({ stalls });
   },
   deleteStall: (id) => {
-    const stalls = get().stalls.filter((s) => s.id !== id);
+    let stalls = get().stalls.filter((s) => s.id !== id);
+    stalls = syncStallsWithContracts(stalls, get().contracts);
     saveToStorage('market_stalls', stalls);
     set({ stalls });
   },
@@ -96,22 +116,33 @@ export const useMarketStore = create<MarketState>((set, get) => ({
 
   addContract: (contract) => {
     const contracts = [...get().contracts, contract];
+    const stalls = syncStallsWithContracts(get().stalls, contracts);
     saveToStorage('market_contracts', contracts);
-    set({ contracts });
+    saveToStorage('market_stalls', stalls);
+    set({ contracts, stalls });
   },
   updateContract: (id, data) => {
     const contracts = get().contracts.map((c) => (c.id === id ? { ...c, ...data } : c));
+    const stalls = syncStallsWithContracts(get().stalls, contracts);
     saveToStorage('market_contracts', contracts);
-    set({ contracts });
+    saveToStorage('market_stalls', stalls);
+    set({ contracts, stalls });
   },
   deleteContract: (id) => {
     const contracts = get().contracts.filter((c) => c.id !== id);
+    const stalls = syncStallsWithContracts(get().stalls, contracts);
     saveToStorage('market_contracts', contracts);
-    set({ contracts });
+    saveToStorage('market_stalls', stalls);
+    set({ contracts, stalls });
   },
 
   addFeeBill: (bill) => {
     const feeBills = [...get().feeBills, bill];
+    saveToStorage('market_feeBills', feeBills);
+    set({ feeBills });
+  },
+  addFeeBills: (bills) => {
+    const feeBills = [...get().feeBills, ...bills];
     saveToStorage('market_feeBills', feeBills);
     set({ feeBills });
   },
