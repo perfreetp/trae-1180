@@ -75,7 +75,11 @@ export default function Merchants() {
       setLicenseType(m.licenseType ?? '');
     }
     const stored = getLicenseDataUrl(id);
-    setPreviewUrl(stored);
+    if (stored) {
+      setPreviewUrl(stored);
+    } else {
+      setPreviewUrl(null);
+    }
   }
 
   function handleSaveBasic() {
@@ -304,7 +308,7 @@ export default function Merchants() {
                     </button>
                   </div>
 
-                  {(previewUrl || selected.licenseUrl) && (
+                  {(previewUrl || selected.licenseType || selected.licenseUrl) && (
                     <div className="mt-4 border-t border-ivory-200 pt-4">
                       <div className="flex items-center justify-between mb-3">
                         <div>
@@ -318,12 +322,14 @@ export default function Merchants() {
                           )}
                         </div>
                         <div className="flex gap-2">
-                          <button
-                            className="btn-secondary btn-sm flex items-center gap-1"
-                            onClick={() => setShowPreviewModal(true)}
-                          >
-                            <Eye className="w-3.5 h-3.5" /> 查看大图
-                          </button>
+                          {previewUrl && (
+                            <button
+                              className="btn-secondary btn-sm flex items-center gap-1"
+                              onClick={() => setShowPreviewModal(true)}
+                            >
+                              <Eye className="w-3.5 h-3.5" /> 查看大图
+                            </button>
+                          )}
                           <button
                             className="btn-secondary btn-sm flex items-center gap-1 text-amber-warm"
                             onClick={handleReplaceLicense}
@@ -333,19 +339,19 @@ export default function Merchants() {
                         </div>
                       </div>
                       <div
-                        className="w-64 h-44 border-2 border-ivory-300 rounded-lg overflow-hidden bg-ivory-50 cursor-pointer hover:ring-2 hover:ring-forest-500 transition-all"
-                        onClick={() => setShowPreviewModal(true)}
+                        className={`w-64 h-44 border-2 border-ivory-300 rounded-lg overflow-hidden bg-ivory-50 ${previewUrl ? 'cursor-pointer hover:ring-2 hover:ring-forest-500 transition-all' : ''}`}
+                        onClick={() => previewUrl && setShowPreviewModal(true)}
                       >
-                        {(previewUrl || (selected.licenseUrl && getLicenseDataUrl(selected.id))) ? (
+                        {previewUrl ? (
                           <img
-                            src={previewUrl || getLicenseDataUrl(selected.id) || ''}
+                            src={previewUrl}
                             alt="证照预览"
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 text-sm">
                             <Upload className="w-8 h-8 mb-2" />
-                            <span>暂无图片</span>
+                            <span>已登记证照，点击上方上传图片</span>
                           </div>
                         )}
                       </div>
@@ -406,14 +412,14 @@ export default function Merchants() {
         )}
       </div>
 
-      {showPreviewModal && (previewUrl || (selected?.licenseUrl && getLicenseDataUrl(selected.id))) && (
+      {showPreviewModal && previewUrl && (
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
           onClick={() => setShowPreviewModal(false)}
         >
           <div className="max-w-3xl max-h-[90vh] p-2" onClick={(e) => e.stopPropagation()}>
             <img
-              src={previewUrl || getLicenseDataUrl(selected!.id) || ''}
+              src={previewUrl}
               alt="证照大图"
               className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
             />

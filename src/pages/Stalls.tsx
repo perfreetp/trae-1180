@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMarketStore } from '@/store/useMarketStore';
 import type { Stall } from '@/types';
 
@@ -19,7 +19,11 @@ interface FormData {
 const emptyForm: FormData = { stallNo: '', area: 'A区', size: '', type: '' };
 
 export default function Stalls() {
-  const { stalls, merchants, addStall, updateStall, deleteStall } = useMarketStore();
+  const { stalls, merchants, contracts, addStall, updateStall, deleteStall, resyncStalls } = useMarketStore();
+
+  useEffect(() => {
+    resyncStalls();
+  }, [resyncStalls]);
 
   const [search, setSearch] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
@@ -100,8 +104,13 @@ export default function Stalls() {
   };
 
   const handlePrint = (stall: Stall) => {
-    const merchantName = getMerchantName(stall.merchantId);
-    const businessType = getMerchantBusiness(stall.merchantId);
+    const activeContract = contracts.find(
+      (c) => c.stallId === stall.id && c.status === 'active'
+    );
+    const currentMerchantId = activeContract?.merchantId ?? stall.merchantId;
+    const isActuallyOccupied = !!activeContract;
+    const merchantName = isActuallyOccupied ? getMerchantName(currentMerchantId) : '（空置）';
+    const businessType = isActuallyOccupied ? getMerchantBusiness(currentMerchantId) : '-';
     const now = new Date().toLocaleDateString('zh-CN');
 
     const html = `

@@ -39,6 +39,8 @@ interface MarketState {
   addInspection: (inspection: Inspection) => void;
   updateInspection: (id: string, data: Partial<Inspection>) => void;
   deleteInspection: (id: string) => void;
+
+  resyncStalls: () => void;
 }
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -71,7 +73,13 @@ function syncStallsWithContracts(stalls: Stall[], contracts: Contract[]): Stall[
 }
 
 export const useMarketStore = create<MarketState>((set, get) => ({
-  stalls: loadFromStorage('market_stalls', initialData.stalls),
+  stalls: (() => {
+    const loaded = loadFromStorage('market_stalls', initialData.stalls);
+    const contracts = loadFromStorage('market_contracts', initialData.contracts);
+    const synced = syncStallsWithContracts(loaded, contracts);
+    saveToStorage('market_stalls', synced);
+    return synced;
+  })(),
   merchants: loadFromStorage('market_merchants', initialData.merchants),
   contracts: loadFromStorage('market_contracts', initialData.contracts),
   feeBills: loadFromStorage('market_feeBills', initialData.feeBills),
@@ -203,5 +211,11 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     const inspections = get().inspections.filter((i) => i.id !== id);
     saveToStorage('market_inspections', inspections);
     set({ inspections });
+  },
+
+  resyncStalls: () => {
+    const stalls = syncStallsWithContracts(get().stalls, get().contracts);
+    saveToStorage('market_stalls', stalls);
+    set({ stalls });
   },
 }));

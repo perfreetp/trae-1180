@@ -130,9 +130,15 @@ export default function Contracts() {
 
   const handleGenerateFee = (contract: Contract) => {
     const now = new Date();
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 5);
-    const dueDate = nextMonth.toISOString().slice(0, 10);
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const existing = feeBills.some(
+      (b) => b.contractId === contract.id && getBillMonth(b) === month
+    );
+    if (existing) {
+      alert(`合同 ${contract.id} 的 ${month} 月收费单已存在，无需重复生成`);
+      return;
+    }
+    const dueDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-05`;
     addFeeBill({
       id: Date.now().toString(),
       contractId: contract.id,
@@ -153,8 +159,7 @@ export default function Contracts() {
     );
 
     const newBills: FeeBill[] = [];
-    const [year, month] = batchMonth.split('-').map(Number);
-    const dueDate = new Date(year, month, 5).toISOString().slice(0, 10);
+    const dueDate = `${batchMonth}-05`;
 
     activeContracts.forEach((c, idx) => {
       const key = `${c.id}_${batchMonth}`;
