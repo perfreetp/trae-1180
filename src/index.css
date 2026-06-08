@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap');
+
+:root {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #FAF3E0;
+  color: #1B4332;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-forest-500 text-white px-4 py-2 rounded-lg font-medium 
+    hover:bg-forest-600 active:bg-forest-700 transition-all duration-200
+    shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply border border-forest-500 text-forest-500 px-4 py-2 rounded-lg font-medium 
+    hover:bg-forest-50 active:bg-forest-100 transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-red-500 text-white px-4 py-2 rounded-lg font-medium 
+    hover:bg-red-600 active:bg-red-700 transition-all duration-200;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-ivory-200 p-6;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 rounded-lg border border-ivory-300 bg-white 
+    focus:outline-none focus:ring-2 focus:ring-forest-500/30 focus:border-forest-500
+    transition-all duration-200 text-sm;
+  }
+
+  .select-field {
+    @apply w-full px-3 py-2 rounded-lg border border-ivory-300 bg-white 
+    focus:outline-none focus:ring-2 focus:ring-forest-500/30 focus:border-forest-500
+    transition-all duration-200 text-sm appearance-none;
+  }
+
+  .table-header {
+    @apply bg-forest-600 text-white;
+  }
+
+  .table-row {
+    @apply border-b border-ivory-200 hover:bg-forest-50/50 transition-colors;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply badge bg-green-100 text-green-700;
+  }
+
+  .badge-red {
+    @apply badge bg-red-100 text-red-700;
+  }
+
+  .badge-yellow {
+    @apply badge bg-amber-100 text-amber-700;
+  }
+
+  .badge-blue {
+    @apply badge bg-blue-100 text-blue-700;
+  }
+
+  .badge-gray {
+    @apply badge bg-gray-100 text-gray-700;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c4b89a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a89c7e;
+}
