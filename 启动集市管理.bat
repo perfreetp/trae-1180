@@ -16,7 +16,8 @@ if not exist node_modules (
 echo 正在启动Vite开发服务器...
 start "Vite Dev Server" cmd /c "npx vite --port 5173"
 
-timeout /t 3 /nobreak >nul
+echo 等待服务就绪...
+timeout /t 5 /nobreak >nul
 
 echo 正在打开应用...
 start http://localhost:5173/stalls
@@ -24,8 +25,6 @@ start http://localhost:5173/stalls
 echo.
 echo ================================
 echo   集市管理系统已启动！
-echo   请勿关闭Vite开发服务器窗口
-echo   关闭服务器即退出应用
+echo   关闭Vite窗口即退出应用
 echo ================================
 echo.
-pause

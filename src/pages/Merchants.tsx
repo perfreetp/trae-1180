@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useMarketStore } from '@/store/useMarketStore';
 import type { Merchant } from '@/types';
+import { ensureLicenseImage, setLicenseDataUrl, removeLicenseDataUrl } from '@/utils/licenseImage';
 import { Eye, Upload, RefreshCw } from 'lucide-react';
 
 const TABS = ['基本信息', '证照信息', '关联摊位'] as const;
@@ -15,30 +16,6 @@ const CONTRACT_STATUS_MAP: Record<string, { label: string; cls: string }> = {
   expired: { label: '已到期', cls: 'badge-yellow' },
   terminated: { label: '已终止', cls: 'badge-red' },
 };
-
-function getLicenseDataUrl(merchantId: string): string | null {
-  try {
-    return localStorage.getItem(`license_img_${merchantId}`);
-  } catch {
-    return null;
-  }
-}
-
-function setLicenseDataUrl(merchantId: string, dataUrl: string) {
-  try {
-    localStorage.setItem(`license_img_${merchantId}`, dataUrl);
-  } catch {
-    // storage full
-  }
-}
-
-function removeLicenseDataUrl(merchantId: string) {
-  try {
-    localStorage.removeItem(`license_img_${merchantId}`);
-  } catch {
-    // ignore
-  }
-}
 
 export default function Merchants() {
   const { merchants, contracts, stalls, addMerchant, updateMerchant, deleteMerchant } = useMarketStore();
@@ -73,10 +50,8 @@ export default function Merchants() {
     if (m) {
       setEditForm({ name: m.name, contact: m.contact, phone: m.phone, business: m.business });
       setLicenseType(m.licenseType ?? '');
-    }
-    const stored = getLicenseDataUrl(id);
-    if (stored) {
-      setPreviewUrl(stored);
+      const imgUrl = ensureLicenseImage(m);
+      setPreviewUrl(imgUrl);
     } else {
       setPreviewUrl(null);
     }
@@ -153,6 +128,8 @@ export default function Merchants() {
       setPreviewUrl(null);
     }
   }
+
+  const hasLicenseInfo = previewUrl || selected?.licenseType || selected?.licenseUrl;
 
   return (
     <div className="flex gap-6 h-full">
@@ -308,7 +285,7 @@ export default function Merchants() {
                     </button>
                   </div>
 
-                  {(previewUrl || selected.licenseType || selected.licenseUrl) && (
+                  {hasLicenseInfo && (
                     <div className="mt-4 border-t border-ivory-200 pt-4">
                       <div className="flex items-center justify-between mb-3">
                         <div>
@@ -351,7 +328,7 @@ export default function Merchants() {
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 text-sm">
                             <Upload className="w-8 h-8 mb-2" />
-                            <span>已登记证照，点击上方上传图片</span>
+                            <span>点击上方上传证照图片</span>
                           </div>
                         )}
                       </div>
